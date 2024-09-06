@@ -2,6 +2,7 @@ package completion
 
 import (
 	"context"
+	"strings"
 
 	"k8s.io/utils/strings/slices"
 
@@ -69,7 +70,40 @@ func PathPrefixComplitionFunc(ctx context.Context, config manager.Config) ([]str
 	return result, nil
 }
 
-func KindAndNameComplitionFunc(ctx context.Context, config manager.Config) ([]string, error) {
+func KindComplitionFunc(ctx context.Context, config manager.Config) ([]string, error) {
+	cfg, err := config.GetKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+	cli := manager.NewSchemeClient(cfg)
+	result := make([]string, 0)
+	res, err := cli.GetObjectMap(ctx, config.GroupVersion)
+	if err != nil {
+		return nil, err
+	}
+	o := config.ToComplete
+	ss := strings.Split(o, ",")
+	l := len(ss)
+	s := ss[l-1]
+	for k := range res {
+		// if len(ss) > 1 {
+		// 	return []string{o + "prefix", "app", "as"}, nil
+		// } else {
+		// 	return []string{o + "prefix", "am", "amh"}, nil
+		// }
+		if o != "" && s != "" && !strings.HasPrefix(k, s) {
+			continue
+		}
+		if slices.Contains(ss, k) {
+			continue
+		}
+		result = append(result, strings.Join(append(ss[:l-1], k), ","))
+	}
+	return result, nil
+
+}
+
+func NameComplitionFunc(ctx context.Context, config manager.Config) ([]string, error) {
 	cfg, err := config.GetKubeConfig()
 	if err != nil {
 		return nil, err

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -37,9 +37,9 @@ func init() {
 		// 	completion.SetMgrConfig(mgrConfig)
 		// },
 		Use:               "watch type [nameprefix]",
-		ValidArgsFunction: makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.KindAndNameComplitionFunc),
+		ValidArgsFunction: makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.NameComplitionFunc),
 		Short:             "A brief description of your command",
-		Args:              cobra.MinimumNArgs(1),
+		Args:              cobra.MinimumNArgs(0),
 		//	BashCompletionFunction: "ls -la",
 		Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -54,8 +54,7 @@ to quickly create a Cobra application.`,
 			}
 			sc := manager.NewSchemeClient(cfg)
 			ctx := context.Background()
-			mgrConfig.Objects = args[0]
-			mgrConfig.Names = args[1:]
+			mgrConfig.Names = args
 			mgr, err := manager.NewManager(ctx, mgrConfig, sc)
 			if err != nil {
 				panic(err)
@@ -73,7 +72,13 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.Namespace, "namespace", "n", "", "object namespace prefix")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.GroupVersion, "group-version", "g", "", "group version")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathPrefix, "path-prefix", "p", "", "object path prefix")
+	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathTemplate, "path-template", "t", "", "object path template")
+	watchCmd.PersistentFlags().StringVarP(&mgrConfig.Objects, "kind", "k", "", "kind")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.EnableAnnotations, "enable-annotations", "a", true, "enable annotations")
+	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.IgnoreMetadata, "ignore-metadate", "i", true, "ignore metadata")
+	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.SliceOrdering, "slice-ordering", "s", true, "slice ordering")
+	watchCmd.PersistentFlags().IntVarP(&mgrConfig.ColumnWidthMax, "column-width-max", "w", 0, "column width max")
+	watchCmd.RegisterFlagCompletionFunc("kind", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.KindComplitionFunc))
 	watchCmd.RegisterFlagCompletionFunc("namespace", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.NamespaceCompletionFunc))
 	watchCmd.RegisterFlagCompletionFunc("path-prefix", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.PathPrefixComplitionFunc))
 	watchCmd.RegisterFlagCompletionFunc("group-version", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.GroupVersionComplitionFunc))
@@ -83,10 +88,7 @@ to quickly create a Cobra application.`,
 func makeCobraFunc(directive cobra.ShellCompDirective, f func(ctx context.Context, mgrConfig manager.Config) ([]string, error)) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {
-			mgrConfig.Objects = args[0]
-		}
-		if len(args) > 1 {
-			mgrConfig.Names = args[1:]
+			mgrConfig.Names = args
 		}
 		mgrConfig.ToComplete = toComplete
 		ctx := cmd.Context()

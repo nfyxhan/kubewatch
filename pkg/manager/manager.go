@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -64,7 +65,11 @@ type Config struct {
 	Names             []string          `json:"names,omitempty"`
 	Labels            map[string]string `json:"labels,omitempty"`
 	EnableAnnotations bool              `json:"enableAnnotations"`
+	SliceOrdering     bool              `json:"sliceOrdering"`
+	ColumnWidthMax    int               `json:"columnWidthMax"`
+	IgnoreMetadata    bool              `json:"ignoreMetadata"`
 	PathPrefix        string            `json:"pathPrefix,omitempty"`
+	PathTemplate      string            `json:"pathTemplate"`
 	ToComplete        string            `json:"toComplete,omitempty"`
 }
 
@@ -110,8 +115,7 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 		}
 	}
 	if len(objects) == 0 {
-		fmt.Println(objectMap)
-		return nil, fmt.Errorf("no validate objects in %s", objectsStr)
+		objects = objectMap
 	}
 	if err := cli.AddToScheme(ctx, scheme); err != nil {
 		return nil, err
@@ -196,14 +200,26 @@ func (m *manager) filterObject(obj client.Object, config Config, w io.Writer, ac
 }
 
 func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.Writer) {
-	changeLogs, _ := diff.Diff(objOld, objNew)
+	changeLogs, _ := diff.Diff(objOld, objNew, diff.SliceOrdering(config.SliceOrdering))
 	t := table.NewWriter()
+	columnConfigs := make([]table.ColumnConfig, 0)
+	header := table.Row{"time", "op", "path", "from", "to"}
+	for i := 0; i < len(header); i++ {
+		columnConfigs = append(columnConfigs, table.ColumnConfig{
+			WidthMax: config.ColumnWidthMax,
+			Number:   i + 1,
+		})
+	}
+	t.SetColumnConfigs(columnConfigs)
 	t.SetOutputMirror(w)
-	t.AppendHeader(table.Row{"time", "op", "path", "from", "to"})
+	t.AppendHeader(header)
 	var rows []table.Row
 	for _, changeLog := range changeLogs {
 		t := changeLog.Type
 		path := strings.Join(changeLog.Path, Split)
+		if !config.IgnoreMetadata {
+			ignorePath = make(map[string]struct{})
+		}
 		if _, ok := ignorePath[path]; ok {
 			continue
 		}
@@ -233,6 +249,11 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 			path = path[len(pathPrefix):]
 		}
 		path = strings.ReplaceAll(path, Split, SplitPrint)
+		if t := config.PathTemplate; t != "" {
+			if ok, _ := regexp.MatchString(t, path); !ok {
+				continue
+			}
+		}
 		from := changeLog.From
 		if from == nil {
 			from = "<nil>"

@@ -113,7 +113,7 @@ func TestKindComplitionFunc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := KindAndNameComplitionFunc(tt.args.ctx, tt.args.config)
+			got, err := NameComplitionFunc(tt.args.ctx, tt.args.config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("KindComplitionFunc() error = %v, wantErr %v", err, tt.wantErr)
 				return
