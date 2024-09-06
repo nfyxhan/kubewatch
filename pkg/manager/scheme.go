@@ -117,11 +117,18 @@ func (c *schemeClient) listObjects(ctx context.Context, group string) ([]SchemeO
 	for _, r := range apiResourceList.APIResources {
 		name := r.SingularName
 		if name == "" {
-			name = r.Kind
+			continue
 		}
 		obj := map[string]interface{}{
 			"kind":       r.Kind,
 			"apiVersion": version,
+		}
+		if r.Version != "" {
+			v := r.Version
+			if r.Group != "" {
+				v = fmt.Sprintf("%s/%s", r.Group, v)
+			}
+			obj["apiVersion"] = v
 		}
 		o := SchemeObject{
 			Name:       name,
