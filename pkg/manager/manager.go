@@ -67,10 +67,12 @@ type Config struct {
 	EnableAnnotations bool              `json:"enableAnnotations"`
 	SliceOrdering     bool              `json:"sliceOrdering"`
 	ColumnWidthMax    int               `json:"columnWidthMax"`
+	RowWidthMax       int               `json:"rowWidthMax"`
 	IgnoreMetadata    bool              `json:"ignoreMetadata"`
 	PathPrefix        string            `json:"pathPrefix,omitempty"`
 	PathTemplate      string            `json:"pathTemplate"`
 	ToComplete        string            `json:"toComplete,omitempty"`
+	MaxRows           int               `json:"maxRows"`
 }
 
 func (c Config) GetKubeConfig() (*rest.Config, error) {
@@ -89,6 +91,8 @@ type manager struct {
 	schemeClient SchemeClient
 	client.Client
 	objects map[string]SchemeObject
+	table   func() table.Writer
+	rows    []table.Row
 }
 
 func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectClient, error) {
@@ -132,6 +136,9 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 		schemeClient: sc,
 		Client:       mgr.GetClient(),
 		objects:      objects,
+		table: func() table.Writer {
+			return NewTable(config)
+		},
 	}
 	builder := ctrl.NewControllerManagedBy(mgr).For(&corev1.Namespace{})
 	writer := os.Stdout
@@ -139,14 +146,14 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 		builder = builder.Watches(&source.Kind{Type: obj.Object}, &handler.Funcs{
 			CreateFunc: func(e event.CreateEvent, w workqueue.RateLimitingInterface) {
 				obj := e.Object
-				if !r.filterObject(obj, config, writer, "create") {
+				if !r.filterObject(ctx, obj, config, "create") {
 					return
 				}
 				r.log(obj).Info("object created")
 			},
 			UpdateFunc: func(e event.UpdateEvent, w workqueue.RateLimitingInterface) {
 				objNew := e.ObjectNew
-				if !r.filterObject(objNew, config, writer, "update") {
+				if !r.filterObject(ctx, objNew, config, "update") {
 					return
 				}
 				objOld := e.ObjectOld
@@ -155,7 +162,7 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 			},
 			DeleteFunc: func(e event.DeleteEvent, w workqueue.RateLimitingInterface) {
 				obj := e.Object
-				if !r.filterObject(obj, config, writer, "delete") {
+				if !r.filterObject(ctx, obj, config, "delete") {
 					return
 				}
 				r.log(obj).Info("object deleted")
@@ -175,7 +182,7 @@ func (m *manager) log(object client.Object) logr.Logger {
 		WithValues("type", object.GetObjectKind().GroupVersionKind())
 }
 
-func (m *manager) filterObject(obj client.Object, config Config, w io.Writer, action string) bool {
+func (m *manager) filterObject(ctx context.Context, obj client.Object, config Config, action string) bool {
 	name := obj.GetName()
 	namespace := obj.GetNamespace()
 	if ns := config.Namespace; ns != "" && !strings.Contains(namespace, ns) {
@@ -195,25 +202,24 @@ func (m *manager) filterObject(obj client.Object, config Config, w io.Writer, ac
 		}
 	}
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
-	fmt.Fprintf(w, "%s %s %s/%s: \n", action, kind, namespace, name)
+	log.FromContext(ctx).Info(action, "kind", kind, "namespace", namespace, "name", name)
 	return true
 }
 
 func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.Writer) {
 	changeLogs, _ := diff.Diff(objOld, objNew, diff.SliceOrdering(config.SliceOrdering))
-	t := table.NewWriter()
-	columnConfigs := make([]table.ColumnConfig, 0)
-	header := table.Row{"time", "op", "path", "from", "to"}
-	for i := 0; i < len(header); i++ {
-		columnConfigs = append(columnConfigs, table.ColumnConfig{
-			WidthMax: config.ColumnWidthMax,
-			Number:   i + 1,
-		})
-	}
-	t.SetColumnConfigs(columnConfigs)
-	t.SetOutputMirror(w)
-	t.AppendHeader(header)
+	kind := objNew.GetObjectKind().GroupVersionKind().Kind
+	now := time.Now().Local().Format("15:04:05.999")
+	key := fmt.Sprintf("%s/%s", kind, objNew.GetName())
 	var rows []table.Row
+	row := table.Row{
+		utils.ColorString(utils.Blue, now),
+		utils.ColorString(utils.Blue, key),
+		"",
+		"",
+		"",
+	}
+	rows = append(rows, row)
 	for _, changeLog := range changeLogs {
 		t := changeLog.Type
 		path := strings.Join(changeLog.Path, Split)
@@ -263,14 +269,45 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 			to = "<nil>"
 		}
 		rows = append(rows, table.Row{
-			time.Now().Local().Format("2006-01-02T15:04:05.999999999"), t, path, from, to,
+			"",
+			strings.TrimPrefix(path, "Object/"),
+			from,
+			to,
+			t,
 		})
 	}
 	if len(rows) == 0 {
 		return
 	}
-	t.AppendRows(rows)
-	t.Render()
+	maxRows := config.MaxRows
+	if len(rows) > maxRows {
+		maxRows = len(rows)
+	}
+	m.rows = append(m.rows, rows...)
+	if len(m.rows) > maxRows {
+		m.rows = m.rows[len(m.rows)-maxRows:]
+	}
+	t := m.table()
+	t.AppendRows(m.rows)
+	s := t.Render()
+	fmt.Fprintf(w, "\033c%s", s)
+}
+
+func NewTable(config Config) table.Writer {
+	t := table.NewWriter()
+	columnConfigs := make([]table.ColumnConfig, 0)
+	header := table.Row{"time", "key", "from", "to", "op"}
+	for i := 0; i < len(header); i++ {
+		columnConfigs = append(columnConfigs, table.ColumnConfig{
+			WidthMax: config.ColumnWidthMax,
+			Number:   i + 1,
+		})
+	}
+	t.SetColumnConfigs(columnConfigs)
+	t.AppendHeader(header)
+	// t.SetAutoIndex(true)
+	t.SetAllowedRowLength(config.RowWidthMax)
+	return t
 }
 
 func (m *manager) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
