@@ -208,18 +208,8 @@ func (m *manager) filterObject(ctx context.Context, obj client.Object, config Co
 
 func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.Writer) {
 	changeLogs, _ := diff.Diff(objOld, objNew, diff.SliceOrdering(config.SliceOrdering))
-	kind := objNew.GetObjectKind().GroupVersionKind().Kind
-	now := time.Now().Local().Format("15:04:05.999")
-	key := fmt.Sprintf("%s/%s", kind, objNew.GetName())
+
 	var rows []table.Row
-	row := table.Row{
-		utils.ColorString(utils.Blue, now),
-		utils.ColorString(utils.Blue, key),
-		"",
-		"",
-		"",
-	}
-	rows = append(rows, row)
 	for _, changeLog := range changeLogs {
 		t := changeLog.Type
 		path := strings.Join(changeLog.Path, Split)
@@ -279,6 +269,17 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 	if len(rows) == 0 {
 		return
 	}
+	kind := objNew.GetObjectKind().GroupVersionKind().Kind
+	now := time.Now().Local().Format("15:04:05.999")
+	key := fmt.Sprintf("%s/%s", kind, objNew.GetName())
+	row := table.Row{
+		utils.ColorString(utils.Blue, now),
+		utils.ColorString(utils.Blue, key),
+		"",
+		"",
+		"",
+	}
+	rows = append([]table.Row{row}, rows...)
 	maxRows := config.MaxRows
 	if len(rows) > maxRows {
 		maxRows = len(rows)
