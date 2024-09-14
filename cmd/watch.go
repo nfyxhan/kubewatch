@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"reflect"
@@ -53,7 +52,6 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("starting")
 			cfg, err := mgrConfig.GetKubeConfig()
 			if err != nil {
 				panic(err)
@@ -81,6 +79,7 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathPrefix, "path-prefix", "p", "", "object path prefix")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathTemplate, "path-template", "t", "", "object path template")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.Objects, "kind", "k", "", "kind")
+	watchCmd.PersistentFlags().StringVarP(&mgrConfig.ExcludeObjects, "exclude-kind", "", "", "exclude kind")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.EnableAnnotations, "enable-annotations", "a", true, "enable annotations")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.IgnoreMetadata, "ignore-metadate", "i", true, "ignore metadata")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.SliceOrdering, "slice-ordering", "", true, "slice ordering")
@@ -88,6 +87,7 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().IntVarP(&mgrConfig.RowWidthMax, "row-width-max", "", size[1], "column width max")
 	watchCmd.PersistentFlags().IntVarP(&mgrConfig.MaxRows, "max-rows", "", size[0]-4, "max rows")
 	watchCmd.RegisterFlagCompletionFunc("kind", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.KindComplitionFunc))
+	watchCmd.RegisterFlagCompletionFunc("exclude-kind", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.KindComplitionFunc))
 	watchCmd.RegisterFlagCompletionFunc("namespace", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.NamespaceCompletionFunc))
 	watchCmd.RegisterFlagCompletionFunc("path-prefix", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.PathPrefixComplitionFunc))
 	watchCmd.RegisterFlagCompletionFunc("group-version", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.GroupVersionComplitionFunc))

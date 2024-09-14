@@ -59,6 +59,7 @@ func init() {
 }
 
 type Config struct {
+	ExcludeObjects    string            `json:"excludeObjects,omitempty"`
 	Objects           string            `json:"objects,omitempty"`
 	Namespace         string            `json:"namespace,omitempty"`
 	GroupVersion      string            `json:"groupVersion,omitempty"`
@@ -115,12 +116,25 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 	objects := make(map[string]SchemeObject, 0)
 	for _, obj := range strings.Split(objectsStr, ",") {
 		if o, ok := objectMap[obj]; ok {
-			objects[obj] = o
+			objects[o.Name] = o
 		}
 	}
 	if len(objects) == 0 {
-		objects = objectMap
+		for _, o := range objectMap {
+			objects[o.Name] = o
+		}
 	}
+	excludeObjectsStr := config.ExcludeObjects
+	for _, obj := range strings.Split(excludeObjectsStr, ",") {
+		if o, ok := objectMap[obj]; ok {
+			delete(objects, o.Name)
+		}
+	}
+	kinds := make([]string, 0)
+	for k := range objects {
+		kinds = append(kinds, k)
+	}
+	fmt.Println("watching ", kinds)
 	if err := cli.AddToScheme(ctx, scheme); err != nil {
 		return nil, err
 	}
