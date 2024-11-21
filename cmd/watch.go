@@ -80,6 +80,7 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathTemplate, "path-template", "t", "", "object path template")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.Objects, "kind", "k", "", "kind")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.ExcludeObjects, "exclude-kind", "", "", "exclude kind")
+	watchCmd.PersistentFlags().StringVarP(&mgrConfig.MetricsBindAddress, "metrics-address", "m", "", "metrics address")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.EnableAnnotations, "enable-annotations", "a", true, "enable annotations")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.IgnoreMetadata, "ignore-metadate", "i", true, "ignore metadata")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.SliceOrdering, "slice-ordering", "", true, "slice ordering")

@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/nfyxhan/kubewatch/pkg/metrics"
 	"github.com/nfyxhan/kubewatch/pkg/utils"
 )
 
@@ -59,21 +60,22 @@ func init() {
 }
 
 type Config struct {
-	ExcludeObjects    string            `json:"excludeObjects,omitempty"`
-	Objects           string            `json:"objects,omitempty"`
-	Namespace         string            `json:"namespace,omitempty"`
-	GroupVersion      string            `json:"groupVersion,omitempty"`
-	Names             []string          `json:"names,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
-	EnableAnnotations bool              `json:"enableAnnotations"`
-	SliceOrdering     bool              `json:"sliceOrdering"`
-	ColumnWidthMax    int               `json:"columnWidthMax"`
-	RowWidthMax       int               `json:"rowWidthMax"`
-	IgnoreMetadata    bool              `json:"ignoreMetadata"`
-	PathPrefix        string            `json:"pathPrefix,omitempty"`
-	PathTemplate      string            `json:"pathTemplate"`
-	ToComplete        string            `json:"toComplete,omitempty"`
-	MaxRows           int               `json:"maxRows"`
+	ExcludeObjects     string            `json:"excludeObjects,omitempty"`
+	Objects            string            `json:"objects,omitempty"`
+	Namespace          string            `json:"namespace,omitempty"`
+	GroupVersion       string            `json:"groupVersion,omitempty"`
+	Names              []string          `json:"names,omitempty"`
+	Labels             map[string]string `json:"labels,omitempty"`
+	EnableAnnotations  bool              `json:"enableAnnotations"`
+	SliceOrdering      bool              `json:"sliceOrdering"`
+	ColumnWidthMax     int               `json:"columnWidthMax"`
+	RowWidthMax        int               `json:"rowWidthMax"`
+	IgnoreMetadata     bool              `json:"ignoreMetadata"`
+	PathPrefix         string            `json:"pathPrefix,omitempty"`
+	PathTemplate       string            `json:"pathTemplate"`
+	ToComplete         string            `json:"toComplete,omitempty"`
+	MaxRows            int               `json:"maxRows"`
+	MetricsBindAddress string
 }
 
 func (c Config) GetKubeConfig() (*rest.Config, error) {
@@ -140,7 +142,7 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 	}
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:             scheme,
-		MetricsBindAddress: "0",
+		MetricsBindAddress: config.MetricsBindAddress,
 	})
 	if err != nil {
 		return nil, err
@@ -180,6 +182,20 @@ func NewManager(ctx context.Context, config Config, cli SchemeClient) (ObjectCli
 					return
 				}
 				r.log(obj).Info("object deleted")
+				metr := metrics.GetMetricsFieldValues()
+				gvk := obj.GetObjectKind().GroupVersionKind()
+				m, err := metr.CurryWith(map[string]string{
+					"group":     gvk.Group,
+					"version":   gvk.Version,
+					"kind":      gvk.Kind,
+					"namespace": obj.GetNamespace(),
+					"name":      obj.GetName(),
+				})
+				if err != nil {
+					r.log(obj).Info("deleted object metrics", "err", err)
+				} else {
+					m.Reset()
+				}
 			},
 		})
 	}
@@ -222,7 +238,8 @@ func (m *manager) filterObject(ctx context.Context, obj client.Object, config Co
 
 func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.Writer) {
 	changeLogs, _ := diff.Diff(objOld, objNew, diff.SliceOrdering(config.SliceOrdering))
-
+	metr := metrics.GetMetricsFieldValues()
+	gvk := objNew.GetObjectKind().GroupVersionKind()
 	var rows []table.Row
 	for _, changeLog := range changeLogs {
 		t := changeLog.Type
@@ -264,17 +281,50 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 				continue
 			}
 		}
+		path = strings.TrimPrefix(path, "Object/")
+		labels := []string{
+			gvk.Group,
+			gvk.Version,
+			gvk.Kind,
+			objNew.GetNamespace(),
+			objNew.GetName(),
+			path,
+		}
+		fn := func(v interface{}) {
+			if v == nil {
+				metr.DeleteLabelValues(labels...)
+				return
+			}
+			var vvv float64
+			t := reflect.ValueOf(v)
+			if t.CanAddr() {
+				v = t.Interface()
+			}
+			switch vv := v.(type) {
+			case float32, float64:
+				vvv = t.Float()
+			case int, int16, int32, int64, int8:
+				vvv = float64(t.Int())
+			default:
+				if vv == nil {
+
+				}
+				return
+			}
+			metr.WithLabelValues(labels...).Set(vvv)
+		}
 		from := changeLog.From
 		if from == nil {
 			from = "<nil>"
 		}
 		to := changeLog.To
+		fn(to)
 		if to == nil {
 			to = "<nil>"
 		}
 		rows = append(rows, table.Row{
 			"",
-			strings.TrimPrefix(path, "Object/"),
+			path,
 			from,
 			to,
 			t,
