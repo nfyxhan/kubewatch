@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -292,7 +293,6 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 		}
 		fn := func(v interface{}) {
 			if v == nil {
-				metr.DeleteLabelValues(labels...)
 				return
 			}
 			var vvv float64
@@ -305,13 +305,34 @@ func (m *manager) DiffObject(objNew, objOld client.Object, config Config, w io.W
 				vvv = t.Float()
 			case int, int16, int32, int64, int8:
 				vvv = float64(t.Int())
-			default:
-				if vv == nil {
-
+			case bool:
+				if vv {
+					vvv = 1
+				} else {
+					vvv = 0
 				}
-				return
+			case string:
+				f, err := strconv.Atoi(vv)
+				if err == nil {
+					vvv = float64(f)
+					break
+				}
+				switch vv {
+				case "true", "True":
+					vvv = 1
+				case "false", "False":
+					vvv = 0
+				default:
+					v = nil
+				}
+			default:
+				v = nil
 			}
-			metr.WithLabelValues(labels...).Set(vvv)
+			if v == nil {
+				metr.DeleteLabelValues(labels...)
+			} else {
+				metr.WithLabelValues(labels...).Set(vvv)
+			}
 		}
 		from := changeLog.From
 		if from == nil {

@@ -38,8 +38,10 @@ func GroupVersionComplitionFunc(ctx context.Context, config manager.Config) ([]s
 	}
 	res := make([]string, 0)
 	for _, g := range groups {
-		version := g.PreferredVersion.GroupVersion
-		res = append(res, version)
+		for _, v := range g.Versions {
+			version := v.GroupVersion
+			res = append(res, version)
+		}
 	}
 	return res, nil
 }
@@ -110,14 +112,14 @@ func NameComplitionFunc(ctx context.Context, config manager.Config) ([]string, e
 	}
 	cli := manager.NewSchemeClient(cfg)
 	if config.Objects == "" {
-		res, err := cli.GetObjectMap(ctx, config.GroupVersion)
-		if err != nil {
-			return nil, err
-		}
+		// res, err := cli.GetObjectMap(ctx, config.GroupVersion)
+		// if err != nil {
+		// 	return nil, err
+		// }
 		result := make([]string, 0)
-		for k := range res {
-			result = append(result, k)
-		}
+		// for k := range res {
+		// 	result = append(result, k)
+		// }
 		return result, nil
 	}
 	mgr, err := manager.NewManager(ctx, config, cli)

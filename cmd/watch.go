@@ -41,7 +41,7 @@ func init() {
 		// 	completion.SetMgrConfig(mgrConfig)
 		// },
 		Use:               "watch type [nameprefix]",
-		ValidArgsFunction: makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.NameComplitionFunc),
+		ValidArgsFunction: makeCobraFunc(cobra.ShellCompDirectiveNoFileComp, completion.NameComplitionFunc),
 		Short:             "A brief description of your command",
 		Args:              cobra.MinimumNArgs(0),
 		//	BashCompletionFunction: "ls -la",
@@ -80,7 +80,7 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.PathTemplate, "path-template", "t", "", "object path template")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.Objects, "kind", "k", "", "kind")
 	watchCmd.PersistentFlags().StringVarP(&mgrConfig.ExcludeObjects, "exclude-kind", "", "", "exclude kind")
-	watchCmd.PersistentFlags().StringVarP(&mgrConfig.MetricsBindAddress, "metrics-address", "m", "", "metrics address")
+	watchCmd.PersistentFlags().StringVarP(&mgrConfig.MetricsBindAddress, "metrics-address", "m", ":6666", "metrics address")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.EnableAnnotations, "enable-annotations", "a", true, "enable annotations")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.IgnoreMetadata, "ignore-metadate", "i", true, "ignore metadata")
 	watchCmd.PersistentFlags().BoolVarP(&mgrConfig.SliceOrdering, "slice-ordering", "", true, "slice ordering")
@@ -89,9 +89,9 @@ to quickly create a Cobra application.`,
 	watchCmd.PersistentFlags().IntVarP(&mgrConfig.MaxRows, "max-rows", "", size[0]-4, "max rows")
 	watchCmd.RegisterFlagCompletionFunc("kind", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.KindComplitionFunc))
 	watchCmd.RegisterFlagCompletionFunc("exclude-kind", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.KindComplitionFunc))
-	watchCmd.RegisterFlagCompletionFunc("namespace", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.NamespaceCompletionFunc))
+	watchCmd.RegisterFlagCompletionFunc("namespace", makeCobraFunc(cobra.ShellCompDirectiveNoFileComp, completion.NamespaceCompletionFunc))
 	watchCmd.RegisterFlagCompletionFunc("path-prefix", makeCobraFunc(cobra.ShellCompDirectiveNoSpace, completion.PathPrefixComplitionFunc))
-	watchCmd.RegisterFlagCompletionFunc("group-version", makeCobraFunc(cobra.ShellCompDirectiveDefault, completion.GroupVersionComplitionFunc))
+	watchCmd.RegisterFlagCompletionFunc("group-version", makeCobraFunc(cobra.ShellCompDirectiveNoFileComp, completion.GroupVersionComplitionFunc))
 	rootCmd.AddCommand(watchCmd)
 }
 
